@@ -1,4 +1,3 @@
-
 #include "llvm/Transforms/Utils/LoopInvariant.h"
 #include <llvm/IR/PassManager.h>
 #include "llvm/IR/Dominators.h"
@@ -9,11 +8,11 @@ using namespace llvm;
 * Funzione che verifica gli usi di un Value (v) comparandoli all'istruzione attuale(i).
 */
 bool definition(Value *v,Instruction &i) {
-	for(auto IterU=v->use_begin();IterU!=v->use_end();IterU++){
-		if (i.isIdenticalTo(dyn_cast <Instruction>(IterU->getUser()))){
+        for(auto IterU=v->use_begin();IterU!=v->use_end();IterU++){
+                if (i.isIdenticalTo(dyn_cast <Instruction>(IterU->getUser()))){
             return true;
         }
-	}
+        }
     return false;
 }
 /**
@@ -26,11 +25,11 @@ bool isPhi(Instruction &i){
     return false;
 }
 /**
-* Funzione che verifica se l'operando (v) di un'istruzione(i) è parametro della funzione. 
+* Funzione che verifica se l'operando (v) di un'istruzione(i) è parametro della funzione.
 */
 bool checkArgs(Value* v,Loop &L,Instruction &i){
     Function *F=(L.getHeader())->getParent();
-	for(auto IterArg=F->arg_begin();IterArg!=F->arg_end();IterArg++){
+        for(auto IterArg=F->arg_begin();IterArg!=F->arg_end();IterArg++){
         Value *arg=IterArg;
         if(definition(arg,i)){
             return true;
@@ -58,7 +57,7 @@ bool isLoopInvariantInstr(Instruction &i, Loop &L){
     return true;
 }
 /*
-* Funzione che verifica se gli operandi(v) di un'istruzione(i) non la rendono LoopInvariant. 
+* Funzione che verifica se gli operandi(v) di un'istruzione(i) non la rendono LoopInvariant.
 */
 bool isLoopInvariantValue(Value* v, Loop &L, Instruction &i){
     if (checkArgs(v,L,i)){
@@ -89,19 +88,15 @@ bool isLoopInvariantValue(Value* v, Loop &L, Instruction &i){
 * Prima sono estratte le uscite del Loop e inserite in uno SmallVector poi una ad una si verifica se sono dominate dal Basic Block dell'istruzione.
 */
 bool dominatesExit(Instruction* i,DominatorTree& DT, Loop& L){
-    SmallVector <BasicBlock*> exitBB;
-    for(auto IterL=L.block_begin();IterL!=L.block_end();IterL++){
-        BasicBlock *BB=*IterL;
-        if(L.isLoopExiting(BB)){
-            exitBB.push_back(BB);
-        }
-    }
-    for(auto block : exitBB){
+    SmallVector<BasicBlock*> ExitBlocks;
+    L.getExitBlocks(ExitBlocks);
+    for(auto block : ExitBlocks){
         if(!DT.dominates(i->getParent(),block)){
             outs()<<"non domina le uscite "<<*i<<" "<< block->getName() <<"\n";
             return false;
         }
     }
+    outs()<<"l'istruzione domina le uscite "<<"\n";
     return true;
 }
 /*
@@ -111,7 +106,7 @@ bool dominatesUse(Instruction* i, DominatorTree& DT, Loop &L){
 
     for(auto IterU=i->use_begin();IterU!=i->use_end();IterU++){
         if(PHINode *phiNode = dyn_cast<PHINode>(IterU->getUser())){
-            //Itera gli incoming value e se il blocco della PHI domina tutti gli incoming block ritorna vero 
+            //Itera gli incoming value e se il blocco della PHI domina tutti gli incoming block ritorna vero
             for(auto IterPHI=0 ;IterPHI<phiNode->getNumIncomingValues();IterPHI++){
                 if(phiNode->getIncomingValue(IterPHI)== i){
                     BasicBlock *IncomingBlock=phiNode->getIncomingBlock(IterPHI);
@@ -120,7 +115,7 @@ bool dominatesUse(Instruction* i, DominatorTree& DT, Loop &L){
                         return false;
                     }
                 }
-            }    
+            }
         }else if(Instruction* use = dyn_cast <Instruction>(IterU->getUser())){
             if(!DT.dominates(i,use)){
                 outs() <<"non domina gli usi " << *use <<"\n";
@@ -128,6 +123,7 @@ bool dominatesUse(Instruction* i, DominatorTree& DT, Loop &L){
             }
         }
     }
+    outs()<<"l'istruzione domina gli usi "<<"\n";
     return true;
 }
 /*
@@ -135,13 +131,19 @@ bool dominatesUse(Instruction* i, DominatorTree& DT, Loop &L){
 */
 bool isInstrDead(Instruction *i, Loop  &L){
     for(auto IterU=i->use_begin();IterU!=i->use_end();IterU++){
-        if (Instruction* use = dyn_cast <Instruction>(IterU->getUser())){
-            if(!L.contains(use->getParent())){
-                outs() <<"non dead " << *i <<"\n";
-                return false;
+            if (PHINode *phi = dyn_cast<PHINode>(IterU->getUser())) {
+                if (!L.contains(phi->getParent())) {
+                        outs() << "non dead" << *i << "\n";
+                        return false;
+                }
+            }else if (Instruction* use = dyn_cast <Instruction>(IterU->getUser())){
+                if(!L.contains(use->getParent())){
+                        outs() <<"non dead " << *i <<"\n";
+                        return false;
             }
         }
     }
+    outs()<<"istruzione dead"<<"\n";
     return true;
 }
 
@@ -172,8 +174,9 @@ PreservedAnalyses LoopInvariant::run(Loop &L, LoopAnalysisManager &LAM, LoopStan
             for(auto IterI=BB->begin();IterI!=BB->end();IterI++){
                 Instruction &i = *IterI;
                 outs() << i << "\n";
-                //Si verifica se un'istruzione è Loop Invariant. In tal caso sarà aggiunta a uno SmallVector. 
+                //Si verifica se un'istruzione è Loop Invariant. In tal caso sarà aggiunta a uno SmallVector.
                 if (isLoopInvariantInstr(i,L)){
+                    outs()<<"istruzione Loop Invariant!"<<"\n";
                     invariants.push_back(&i);
                 }else{
                     outs() <<" Istruzione non Loop Invariant"<<"\n";
@@ -186,7 +189,8 @@ PreservedAnalyses LoopInvariant::run(Loop &L, LoopAnalysisManager &LAM, LoopStan
         */
         for(auto instr : invariants){
             outs() << *instr <<"\n";
-            if(((dominatesExit(instr, DT, L)|| isInstrDead(instr, L))&& dominatesUse(instr,DT,L))){ 
+            if(((dominatesExit(instr, DT, L) || isInstrDead(instr, L))&& dominatesUse(instr,DT,L))){
+                outs()<<"istruzione OK per la code motion"<<"\n";
                 preHeader.push_back(instr);
             }
         }
