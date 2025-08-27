@@ -189,7 +189,7 @@ PreservedAnalyses LoopInvariant::run(Loop &L, LoopAnalysisManager &LAM, LoopStan
         */
         for(auto instr : invariants){
             outs() << *instr <<"\n";
-            if(((dominatesExit(instr, DT, L) || isInstrDead(instr, L))&& dominatesUse(instr,DT,L))){
+            if(((isInstrDead(instr, L) || dominatesExit(instr, DT, L))&& dominatesUse(instr,DT,L))){
                 outs()<<"istruzione OK per la code motion"<<"\n";
                 preHeader.push_back(instr);
             }
